@@ -20,6 +20,11 @@
     "stable_frames": 4,
     "cooldown_ms": 1200
   },
+  "effects": {
+    "enabled": true,
+    "duration_ms": 1400,
+    "confetti_count": 70
+  },
   "preview": {
     "webcam_window_name": "WhatsApp Interactive Motion - Webcam Preview",
     "crop_window_name": "WhatsApp Interactive Motion - WhatsApp Crop Preview"

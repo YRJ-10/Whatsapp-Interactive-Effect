@@ -8,8 +8,9 @@ import cv2
 from app.capture.webcam import WebcamCapture, WebcamSettings
 from app.capture.whatsapp_crop import ScreenCropCapture, ScreenCropSettings
 from app.config import load_config
+from app.effects.engine import EffectEngine, EffectsSettings
 from app.vision.gesture_detector import create_gesture_detector
-from app.vision.gesture_result import GestureResult
+from app.vision.gesture_result import GestureResult, NO_GESTURE
 from app.vision.stabilizer import GestureEvent, GestureStabilizer, StabilizerState
 
 
@@ -47,6 +48,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gesture-min-score", type=float, default=None)
     parser.add_argument("--stable-frames", type=int, default=None)
     parser.add_argument("--gesture-cooldown-ms", type=int, default=None)
+    parser.add_argument(
+        "--disable-effects",
+        action="store_true",
+        help="Run preview without visual effects.",
+    )
+    parser.add_argument("--effect-duration-ms", type=int, default=None)
+    parser.add_argument(
+        "--demo-effect",
+        choices=("Open_Palm", "Closed_Fist", "Thumb_Up", "Victory", "OK_Sign"),
+        default=None,
+        help="Trigger one effect at startup for preview testing.",
+    )
     return parser.parse_args()
 
 
@@ -57,13 +70,19 @@ def main() -> int:
     webcam_settings = _webcam_settings_from_args(args, config.camera)
     crop_settings = _crop_settings_from_args(args, config.screen_crop)
     gesture_settings = _gesture_settings_from_args(args, config.gesture)
+    effects_settings = _effects_settings_from_args(args, config.effects)
 
     print(f"Starting preview mode: {args.mode}.")
     print("Press q or Esc in the preview window to stop.")
 
     try:
         if args.mode == "webcam":
-            _run_webcam_preview(webcam_settings, config.preview.webcam_window_name)
+            _run_webcam_preview(
+                webcam_settings,
+                effects_settings,
+                args.demo_effect,
+                config.preview.webcam_window_name,
+            )
         elif args.mode == "crop":
             _run_crop_preview(
                 crop_settings,
@@ -75,6 +94,8 @@ def main() -> int:
                 webcam_settings,
                 crop_settings,
                 gesture_settings,
+                effects_settings,
+                args.demo_effect,
                 config.preview.webcam_window_name,
                 config.preview.crop_window_name,
             )
@@ -127,13 +148,33 @@ def _gesture_settings_from_args(args, gesture_config) -> dict[str, object]:
     }
 
 
-def _run_webcam_preview(settings: WebcamSettings, window_name: str) -> None:
+def _effects_settings_from_args(args, effects_config) -> EffectsSettings:
+    return EffectsSettings(
+        enabled=bool(effects_config.enabled) and not args.disable_effects,
+        duration_ms=args.effect_duration_ms
+        if args.effect_duration_ms is not None
+        else effects_config.duration_ms,
+        confetti_count=effects_config.confetti_count,
+    )
+
+
+def _run_webcam_preview(
+    settings: WebcamSettings,
+    effects_settings: EffectsSettings,
+    demo_effect: str | None,
+    window_name: str,
+) -> None:
     fps_meter = FpsMeter()
+    effect_engine = EffectEngine(effects_settings)
+    _trigger_demo_effect(effect_engine, demo_effect)
+
     with WebcamCapture(settings) as webcam:
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
         while True:
             frame = webcam.read()
+            now_ms = _now_ms()
+            frame = effect_engine.apply(frame, now_ms)
             measured_fps = fps_meter.tick()
 
             _draw_webcam_status(frame, measured_fps, settings)
@@ -181,11 +222,15 @@ def _run_dual_preview(
     webcam_settings: WebcamSettings,
     crop_settings: ScreenCropSettings,
     gesture_settings: dict[str, object],
+    effects_settings: EffectsSettings,
+    demo_effect: str | None,
     webcam_window_name: str,
     crop_window_name: str,
 ) -> None:
     webcam_fps = FpsMeter()
     crop_fps = FpsMeter()
+    effect_engine = EffectEngine(effects_settings)
+    _trigger_demo_effect(effect_engine, demo_effect)
 
     with WebcamCapture(webcam_settings) as webcam:
         with ScreenCropCapture(crop_settings) as screen_crop:
@@ -198,8 +243,11 @@ def _run_dual_preview(
                 while True:
                     webcam_frame = webcam.read()
                     crop_frame = screen_crop.read()
+                    now_ms = _now_ms()
                     gesture = detector.detect(crop_frame)
-                    event = stabilizer.update(gesture, _now_ms())
+                    event = stabilizer.update(gesture, now_ms)
+                    effect_engine.trigger(event)
+                    webcam_frame = effect_engine.apply(webcam_frame, now_ms)
 
                     _draw_webcam_status(
                         webcam_frame,
@@ -256,6 +304,28 @@ def _create_stabilizer_from_settings(
     return GestureStabilizer(
         stable_frames=int(gesture_settings["stable_frames"]),
         cooldown_ms=int(gesture_settings["cooldown_ms"]),
+    )
+
+
+def _trigger_demo_effect(
+    effect_engine: EffectEngine,
+    gesture_name: str | None,
+) -> None:
+    if gesture_name is None:
+        return
+
+    now_ms = _now_ms()
+    effect_engine.trigger(
+        GestureEvent(
+            gesture=GestureResult(
+                name=gesture_name,
+                score=1.0,
+                source="demo",
+                landmarks=NO_GESTURE.landmarks,
+            ),
+            stable_frames=1,
+            timestamp_ms=now_ms,
+        )
     )
 
 

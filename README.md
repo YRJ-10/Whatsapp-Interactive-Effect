@@ -8,6 +8,7 @@ MVP pendamping WhatsApp Desktop untuk membaca gesture lawan bicara dan memunculk
 - Fase 2: manual screen crop preview untuk area video lawan bicara di WhatsApp.
 - Fase 3: gesture detection dari crop WhatsApp.
 - Fase 4: gesture stabilizer + event cooldown.
+- Fase 5: effect renderer di video webcam sendiri.
 
 ## Setup
 
@@ -128,4 +129,36 @@ Override dari command:
 
 ```powershell
 python -m app.main --mode crop --stable-frames 3 --gesture-cooldown-ms 1000
+```
+
+## Run Fase 5
+
+Efek aktif otomatis di mode `dual`. Gesture stabil dari crop WhatsApp akan memicu efek pada preview webcam:
+
+- `Open Palm` -> border glow
+- `Fist` -> shake + impact flash
+- `Thumbs Up` -> LIKE badge
+- `Victory` -> confetti
+- `OK Sign` -> ring pulse
+
+```powershell
+python -m app.main --mode dual
+```
+
+Tes efek tanpa WhatsApp/gesture:
+
+```powershell
+python -m app.main --mode webcam --demo-effect Victory
+```
+
+Matikan efek:
+
+```powershell
+python -m app.main --mode dual --disable-effects
+```
+
+Ubah durasi efek:
+
+```powershell
+python -m app.main --mode dual --effect-duration-ms 1800
 ```

@@ -1,0 +1,1 @@
+"""Deterministic OpenCV effect overlays."""

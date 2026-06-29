@@ -35,6 +35,13 @@ class GestureConfig:
 
 
 @dataclass(frozen=True)
+class EffectsConfig:
+    enabled: bool = True
+    duration_ms: int = 1400
+    confetti_count: int = 70
+
+
+@dataclass(frozen=True)
 class PreviewConfig:
     webcam_window_name: str = "WhatsApp Interactive Motion - Webcam Preview"
     crop_window_name: str = "WhatsApp Interactive Motion - WhatsApp Crop Preview"
@@ -45,6 +52,7 @@ class AppConfig:
     camera: CameraConfig = field(default_factory=CameraConfig)
     screen_crop: ScreenCropConfig = field(default_factory=ScreenCropConfig)
     gesture: GestureConfig = field(default_factory=GestureConfig)
+    effects: EffectsConfig = field(default_factory=EffectsConfig)
     preview: PreviewConfig = field(default_factory=PreviewConfig)
 
 
@@ -57,6 +65,7 @@ def load_config(path: str | Path = "config.json") -> AppConfig:
     camera = _section(raw, "camera")
     screen_crop = _section(raw, "screen_crop")
     gesture = _section(raw, "gesture")
+    effects = _section(raw, "effects")
     preview = _section(raw, "preview")
 
     return AppConfig(
@@ -80,6 +89,11 @@ def load_config(path: str | Path = "config.json") -> AppConfig:
             enable_ok_sign=_as_bool(gesture.get("enable_ok_sign", True)),
             stable_frames=int(gesture.get("stable_frames", 4)),
             cooldown_ms=int(gesture.get("cooldown_ms", 1200)),
+        ),
+        effects=EffectsConfig(
+            enabled=_as_bool(effects.get("enabled", True)),
+            duration_ms=int(effects.get("duration_ms", 1400)),
+            confetti_count=int(effects.get("confetti_count", 70)),
         ),
         preview=PreviewConfig(
             webcam_window_name=str(
