@@ -25,6 +25,12 @@
     "duration_ms": 1400,
     "confetti_count": 70
   },
+  "virtual_camera": {
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "enabled_preview": true
+  },
   "preview": {
     "webcam_window_name": "WhatsApp Interactive Motion - Webcam Preview",
     "crop_window_name": "WhatsApp Interactive Motion - WhatsApp Crop Preview"

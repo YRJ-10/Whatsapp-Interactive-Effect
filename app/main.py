@@ -9,6 +9,7 @@ from app.capture.webcam import WebcamCapture, WebcamSettings
 from app.capture.whatsapp_crop import ScreenCropCapture, ScreenCropSettings
 from app.config import load_config
 from app.effects.engine import EffectEngine, EffectsSettings
+from app.output.virtual_camera import VirtualCameraOutput, VirtualCameraSettings
 from app.vision.gesture_detector import create_gesture_detector
 from app.vision.gesture_result import GestureResult, NO_GESTURE
 from app.vision.stabilizer import GestureEvent, GestureStabilizer, StabilizerState
@@ -21,7 +22,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", default="config.json", help="Path to config file.")
     parser.add_argument(
         "--mode",
-        choices=("webcam", "crop", "dual"),
+        choices=("webcam", "crop", "dual", "virtual"),
         default="webcam",
         help="Preview mode to run.",
     )
@@ -60,6 +61,14 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Trigger one effect at startup for preview testing.",
     )
+    parser.add_argument("--virtual-width", type=int, default=None)
+    parser.add_argument("--virtual-height", type=int, default=None)
+    parser.add_argument("--virtual-fps", type=int, default=None)
+    parser.add_argument(
+        "--no-virtual-preview",
+        action="store_true",
+        help="Send to virtual camera without showing local preview windows.",
+    )
     return parser.parse_args()
 
 
@@ -71,6 +80,7 @@ def main() -> int:
     crop_settings = _crop_settings_from_args(args, config.screen_crop)
     gesture_settings = _gesture_settings_from_args(args, config.gesture)
     effects_settings = _effects_settings_from_args(args, config.effects)
+    virtual_settings = _virtual_settings_from_args(args, config.virtual_camera)
 
     print(f"Starting preview mode: {args.mode}.")
     print("Press q or Esc in the preview window to stop.")
@@ -89,13 +99,25 @@ def main() -> int:
                 gesture_settings,
                 config.preview.crop_window_name,
             )
-        else:
+        elif args.mode == "dual":
             _run_dual_preview(
                 webcam_settings,
                 crop_settings,
                 gesture_settings,
                 effects_settings,
                 args.demo_effect,
+                config.preview.webcam_window_name,
+                config.preview.crop_window_name,
+            )
+        else:
+            _run_virtual_camera_pipeline(
+                webcam_settings,
+                crop_settings,
+                gesture_settings,
+                effects_settings,
+                virtual_settings,
+                args.demo_effect,
+                config.virtual_camera.enabled_preview and not args.no_virtual_preview,
                 config.preview.webcam_window_name,
                 config.preview.crop_window_name,
             )
@@ -155,6 +177,18 @@ def _effects_settings_from_args(args, effects_config) -> EffectsSettings:
         if args.effect_duration_ms is not None
         else effects_config.duration_ms,
         confetti_count=effects_config.confetti_count,
+    )
+
+
+def _virtual_settings_from_args(args, virtual_config) -> VirtualCameraSettings:
+    return VirtualCameraSettings(
+        width=args.virtual_width
+        if args.virtual_width is not None
+        else virtual_config.width,
+        height=args.virtual_height
+        if args.virtual_height is not None
+        else virtual_config.height,
+        fps=args.virtual_fps if args.virtual_fps is not None else virtual_config.fps,
     )
 
 
@@ -272,6 +306,68 @@ def _run_dual_preview(
                 detector.close()
 
 
+def _run_virtual_camera_pipeline(
+    webcam_settings: WebcamSettings,
+    crop_settings: ScreenCropSettings,
+    gesture_settings: dict[str, object],
+    effects_settings: EffectsSettings,
+    virtual_settings: VirtualCameraSettings,
+    demo_effect: str | None,
+    enabled_preview: bool,
+    webcam_window_name: str,
+    crop_window_name: str,
+) -> None:
+    webcam_fps = FpsMeter()
+    crop_fps = FpsMeter()
+    effect_engine = EffectEngine(effects_settings)
+    _trigger_demo_effect(effect_engine, demo_effect)
+
+    with WebcamCapture(webcam_settings) as webcam:
+        with ScreenCropCapture(crop_settings) as screen_crop:
+            with VirtualCameraOutput(virtual_settings) as virtual_camera:
+                detector = _create_detector_from_settings(gesture_settings)
+                stabilizer = _create_stabilizer_from_settings(gesture_settings)
+                try:
+                    if enabled_preview:
+                        cv2.namedWindow(webcam_window_name, cv2.WINDOW_NORMAL)
+                        cv2.namedWindow(crop_window_name, cv2.WINDOW_NORMAL)
+
+                    while True:
+                        webcam_frame = webcam.read()
+                        crop_frame = screen_crop.read()
+                        now_ms = _now_ms()
+                        gesture = detector.detect(crop_frame)
+                        event = stabilizer.update(gesture, now_ms)
+                        effect_engine.trigger(event)
+                        webcam_frame = effect_engine.apply(webcam_frame, now_ms)
+                        output_frame = webcam_frame.copy()
+
+                        _draw_webcam_status(
+                            webcam_frame,
+                            webcam_fps.tick(),
+                            webcam_settings,
+                        )
+                        _draw_virtual_status(webcam_frame, virtual_settings)
+                        _draw_crop_status(
+                            crop_frame,
+                            crop_fps.tick(),
+                            crop_settings,
+                            gesture,
+                            stabilizer.state(),
+                            event,
+                        )
+
+                        virtual_camera.send(output_frame)
+
+                        if enabled_preview:
+                            cv2.imshow(webcam_window_name, webcam_frame)
+                            cv2.imshow(crop_window_name, crop_frame)
+                            if _should_quit():
+                                break
+                finally:
+                    detector.close()
+
+
 class FpsMeter:
     def __init__(self) -> None:
         self._frame_count = 0
@@ -348,6 +444,26 @@ def _draw_webcam_status(
         f" @ {settings.fps} FPS | measured {measured_fps:.1f} FPS"
     )
     _draw_status_bar(frame, status)
+
+
+def _draw_virtual_status(
+    frame,
+    settings: VirtualCameraSettings,
+) -> None:
+    status = f"Virtual camera output: {settings.width}x{settings.height} @ {settings.fps} FPS"
+    frame_width = frame.shape[1]
+    right = min(frame_width - 12, 930)
+    cv2.rectangle(frame, (12, 62), (right, 104), (0, 0, 0), thickness=-1)
+    cv2.putText(
+        frame,
+        status,
+        (24, 90),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.72,
+        (80, 220, 255),
+        2,
+        cv2.LINE_AA,
+    )
 
 
 def _draw_crop_status(

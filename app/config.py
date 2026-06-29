@@ -42,6 +42,14 @@ class EffectsConfig:
 
 
 @dataclass(frozen=True)
+class VirtualCameraConfig:
+    width: int = 1280
+    height: int = 720
+    fps: int = 30
+    enabled_preview: bool = True
+
+
+@dataclass(frozen=True)
 class PreviewConfig:
     webcam_window_name: str = "WhatsApp Interactive Motion - Webcam Preview"
     crop_window_name: str = "WhatsApp Interactive Motion - WhatsApp Crop Preview"
@@ -53,6 +61,7 @@ class AppConfig:
     screen_crop: ScreenCropConfig = field(default_factory=ScreenCropConfig)
     gesture: GestureConfig = field(default_factory=GestureConfig)
     effects: EffectsConfig = field(default_factory=EffectsConfig)
+    virtual_camera: VirtualCameraConfig = field(default_factory=VirtualCameraConfig)
     preview: PreviewConfig = field(default_factory=PreviewConfig)
 
 
@@ -66,6 +75,7 @@ def load_config(path: str | Path = "config.json") -> AppConfig:
     screen_crop = _section(raw, "screen_crop")
     gesture = _section(raw, "gesture")
     effects = _section(raw, "effects")
+    virtual_camera = _section(raw, "virtual_camera")
     preview = _section(raw, "preview")
 
     return AppConfig(
@@ -94,6 +104,12 @@ def load_config(path: str | Path = "config.json") -> AppConfig:
             enabled=_as_bool(effects.get("enabled", True)),
             duration_ms=int(effects.get("duration_ms", 1400)),
             confetti_count=int(effects.get("confetti_count", 70)),
+        ),
+        virtual_camera=VirtualCameraConfig(
+            width=int(virtual_camera.get("width", 1280)),
+            height=int(virtual_camera.get("height", 720)),
+            fps=int(virtual_camera.get("fps", 30)),
+            enabled_preview=_as_bool(virtual_camera.get("enabled_preview", True)),
         ),
         preview=PreviewConfig(
             webcam_window_name=str(

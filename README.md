@@ -9,6 +9,7 @@ MVP pendamping WhatsApp Desktop untuk membaca gesture lawan bicara dan memunculk
 - Fase 3: gesture detection dari crop WhatsApp.
 - Fase 4: gesture stabilizer + event cooldown.
 - Fase 5: effect renderer di video webcam sendiri.
+- Fase 6: virtual camera output untuk WhatsApp.
 
 ## Setup
 
@@ -161,4 +162,41 @@ Ubah durasi efek:
 
 ```powershell
 python -m app.main --mode dual --effect-duration-ms 1800
+```
+
+## Run Fase 6
+
+Fase 6 mengirim video webcam yang sudah diberi efek ke virtual camera.
+
+Prasyarat Windows:
+
+- Install OBS Studio atau virtual camera provider lain yang kompatibel dengan `pyvirtualcam`.
+- Pastikan virtual camera tersedia di aplikasi video.
+
+Jalankan pipeline penuh:
+
+```powershell
+python -m app.main --mode virtual
+```
+
+Setelah jalan, pilih virtual camera tersebut sebagai kamera di WhatsApp Desktop.
+
+Output yang dikirim ke virtual camera bersih dari teks debug. Window preview lokal tetap menampilkan status pipeline.
+
+Jalankan tanpa preview lokal:
+
+```powershell
+python -m app.main --mode virtual --no-virtual-preview
+```
+
+Atur resolusi output virtual camera:
+
+```powershell
+python -m app.main --mode virtual --virtual-width 1280 --virtual-height 720 --virtual-fps 30
+```
+
+Tes virtual camera dengan efek demo:
+
+```powershell
+python -m app.main --mode virtual --demo-effect Victory
 ```
