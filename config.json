@@ -16,7 +16,9 @@
     "enabled": true,
     "model_path": "models/gesture_recognizer.task",
     "min_score": 0.55,
-    "enable_ok_sign": true
+    "enable_ok_sign": true,
+    "stable_frames": 4,
+    "cooldown_ms": 1200
   },
   "preview": {
     "webcam_window_name": "WhatsApp Interactive Motion - Webcam Preview",

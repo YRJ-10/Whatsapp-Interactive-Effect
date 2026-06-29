@@ -10,6 +10,7 @@ from app.capture.whatsapp_crop import ScreenCropCapture, ScreenCropSettings
 from app.config import load_config
 from app.vision.gesture_detector import create_gesture_detector
 from app.vision.gesture_result import GestureResult
+from app.vision.stabilizer import GestureEvent, GestureStabilizer, StabilizerState
 
 
 def parse_args() -> argparse.Namespace:
@@ -44,6 +45,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--gesture-model", default=None, help="Path to .task model.")
     parser.add_argument("--gesture-min-score", type=float, default=None)
+    parser.add_argument("--stable-frames", type=int, default=None)
+    parser.add_argument("--gesture-cooldown-ms", type=int, default=None)
     return parser.parse_args()
 
 
@@ -115,6 +118,12 @@ def _gesture_settings_from_args(args, gesture_config) -> dict[str, object]:
         if args.gesture_min_score is not None
         else gesture_config.min_score,
         "enable_ok_sign": gesture_config.enable_ok_sign,
+        "stable_frames": args.stable_frames
+        if args.stable_frames is not None
+        else gesture_config.stable_frames,
+        "cooldown_ms": args.gesture_cooldown_ms
+        if args.gesture_cooldown_ms is not None
+        else gesture_config.cooldown_ms,
     }
 
 
@@ -141,7 +150,8 @@ def _run_crop_preview(
 ) -> None:
     fps_meter = FpsMeter()
     with ScreenCropCapture(settings) as screen_crop:
-        detector = create_gesture_detector(**gesture_settings)
+        detector = _create_detector_from_settings(gesture_settings)
+        stabilizer = _create_stabilizer_from_settings(gesture_settings)
         try:
             cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
@@ -149,8 +159,16 @@ def _run_crop_preview(
                 frame = screen_crop.read()
                 measured_fps = fps_meter.tick()
                 gesture = detector.detect(frame)
+                event = stabilizer.update(gesture, _now_ms())
 
-                _draw_crop_status(frame, measured_fps, settings, gesture)
+                _draw_crop_status(
+                    frame,
+                    measured_fps,
+                    settings,
+                    gesture,
+                    stabilizer.state(),
+                    event,
+                )
                 cv2.imshow(window_name, frame)
 
                 if _should_quit():
@@ -171,7 +189,8 @@ def _run_dual_preview(
 
     with WebcamCapture(webcam_settings) as webcam:
         with ScreenCropCapture(crop_settings) as screen_crop:
-            detector = create_gesture_detector(**gesture_settings)
+            detector = _create_detector_from_settings(gesture_settings)
+            stabilizer = _create_stabilizer_from_settings(gesture_settings)
             try:
                 cv2.namedWindow(webcam_window_name, cv2.WINDOW_NORMAL)
                 cv2.namedWindow(crop_window_name, cv2.WINDOW_NORMAL)
@@ -180,6 +199,7 @@ def _run_dual_preview(
                     webcam_frame = webcam.read()
                     crop_frame = screen_crop.read()
                     gesture = detector.detect(crop_frame)
+                    event = stabilizer.update(gesture, _now_ms())
 
                     _draw_webcam_status(
                         webcam_frame,
@@ -191,6 +211,8 @@ def _run_dual_preview(
                         crop_fps.tick(),
                         crop_settings,
                         gesture,
+                        stabilizer.state(),
+                        event,
                     )
 
                     cv2.imshow(webcam_window_name, webcam_frame)
@@ -219,6 +241,28 @@ class FpsMeter:
         return self._measured_fps
 
 
+def _create_detector_from_settings(gesture_settings: dict[str, object]):
+    return create_gesture_detector(
+        enabled=bool(gesture_settings["enabled"]),
+        model_path=str(gesture_settings["model_path"]),
+        min_score=float(gesture_settings["min_score"]),
+        enable_ok_sign=bool(gesture_settings["enable_ok_sign"]),
+    )
+
+
+def _create_stabilizer_from_settings(
+    gesture_settings: dict[str, object],
+) -> GestureStabilizer:
+    return GestureStabilizer(
+        stable_frames=int(gesture_settings["stable_frames"]),
+        cooldown_ms=int(gesture_settings["cooldown_ms"]),
+    )
+
+
+def _now_ms() -> int:
+    return int(time.perf_counter() * 1000)
+
+
 def _should_quit() -> bool:
     key = cv2.waitKey(1) & 0xFF
     return key in (ord("q"), 27)
@@ -241,6 +285,8 @@ def _draw_crop_status(
     measured_fps: float,
     settings: ScreenCropSettings,
     gesture: GestureResult | None = None,
+    stabilizer_state: StabilizerState | None = None,
+    event: GestureEvent | None = None,
 ) -> None:
     status = (
         f"Crop x={settings.x} y={settings.y} {settings.width}x{settings.height}"
@@ -248,7 +294,7 @@ def _draw_crop_status(
     )
     _draw_status_bar(frame, status)
     if gesture is not None:
-        _draw_gesture_status(frame, gesture)
+        _draw_gesture_status(frame, gesture, stabilizer_state, event)
 
 
 def _draw_status_bar(frame, status: str) -> None:
@@ -267,13 +313,18 @@ def _draw_status_bar(frame, status: str) -> None:
     )
 
 
-def _draw_gesture_status(frame, gesture: GestureResult) -> None:
+def _draw_gesture_status(
+    frame,
+    gesture: GestureResult,
+    stabilizer_state: StabilizerState | None,
+    event: GestureEvent | None,
+) -> None:
     if gesture.name == "Unavailable":
         status = f"Gesture: unavailable | {gesture.source[:80]}"
         color = (64, 220, 255)
     else:
         status = (
-            f"Gesture: {gesture.display_name}"
+            f"Raw: {gesture.display_name}"
             f" | score {gesture.score:.2f} | {gesture.source}"
         )
         color = (64, 255, 64) if gesture.name != "None" else (190, 190, 190)
@@ -288,6 +339,34 @@ def _draw_gesture_status(frame, gesture: GestureResult) -> None:
         cv2.FONT_HERSHEY_SIMPLEX,
         0.72,
         color,
+        2,
+        cv2.LINE_AA,
+    )
+
+    if stabilizer_state is None:
+        return
+
+    if event is not None:
+        event_label = event.gesture.display_name
+    elif stabilizer_state.last_event is not None:
+        event_label = stabilizer_state.last_event.gesture.display_name
+    else:
+        event_label = "None"
+
+    stable_status = (
+        f"Stable candidate: {stabilizer_state.candidate_name}"
+        f" x{stabilizer_state.candidate_frames}"
+        f" | event: {event_label}"
+    )
+    stable_color = (0, 215, 255) if event is not None else (255, 220, 120)
+    cv2.rectangle(frame, (12, 112), (right, 154), (0, 0, 0), thickness=-1)
+    cv2.putText(
+        frame,
+        stable_status,
+        (24, 140),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.72,
+        stable_color,
         2,
         cv2.LINE_AA,
     )

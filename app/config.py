@@ -30,6 +30,8 @@ class GestureConfig:
     model_path: str = "models/gesture_recognizer.task"
     min_score: float = 0.55
     enable_ok_sign: bool = True
+    stable_frames: int = 4
+    cooldown_ms: int = 1200
 
 
 @dataclass(frozen=True)
@@ -76,6 +78,8 @@ def load_config(path: str | Path = "config.json") -> AppConfig:
             model_path=str(gesture.get("model_path", "models/gesture_recognizer.task")),
             min_score=float(gesture.get("min_score", 0.55)),
             enable_ok_sign=_as_bool(gesture.get("enable_ok_sign", True)),
+            stable_frames=int(gesture.get("stable_frames", 4)),
+            cooldown_ms=int(gesture.get("cooldown_ms", 1200)),
         ),
         preview=PreviewConfig(
             webcam_window_name=str(

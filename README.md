@@ -7,6 +7,7 @@ MVP pendamping WhatsApp Desktop untuk membaca gesture lawan bicara dan memunculk
 - Fase 1: skeleton app + webcam preview.
 - Fase 2: manual screen crop preview untuk area video lawan bicara di WhatsApp.
 - Fase 3: gesture detection dari crop WhatsApp.
+- Fase 4: gesture stabilizer + event cooldown.
 
 ## Setup
 
@@ -102,4 +103,29 @@ Kalau ingin tes crop tanpa gesture detection:
 
 ```powershell
 python -m app.main --mode crop --disable-gesture-detection
+```
+
+## Run Fase 4
+
+Fase 4 aktif otomatis di mode `crop` dan `dual`. Preview akan menampilkan:
+
+- raw gesture per frame
+- stable candidate dan jumlah frame berturut-turut
+- event terakhir yang sudah lolos stabilizer
+
+Default stabilizer ada di `config.json`:
+
+```json
+{
+  "gesture": {
+    "stable_frames": 4,
+    "cooldown_ms": 1200
+  }
+}
+```
+
+Override dari command:
+
+```powershell
+python -m app.main --mode crop --stable-frames 3 --gesture-cooldown-ms 1000
 ```
