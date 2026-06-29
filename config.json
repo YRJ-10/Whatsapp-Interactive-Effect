@@ -1,0 +1,11 @@
+{
+  "camera": {
+    "index": 0,
+    "width": 1280,
+    "height": 720,
+    "fps": 30
+  },
+  "preview": {
+    "window_name": "WhatsApp Interactive Motion - Webcam Preview"
+  }
+}
