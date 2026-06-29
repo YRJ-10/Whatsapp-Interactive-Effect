@@ -5,7 +5,15 @@
     "height": 720,
     "fps": 30
   },
+  "screen_crop": {
+    "x": 100,
+    "y": 100,
+    "width": 640,
+    "height": 360,
+    "backend": "auto"
+  },
   "preview": {
-    "window_name": "WhatsApp Interactive Motion - Webcam Preview"
+    "webcam_window_name": "WhatsApp Interactive Motion - Webcam Preview",
+    "crop_window_name": "WhatsApp Interactive Motion - WhatsApp Crop Preview"
   }
 }

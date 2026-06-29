@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from dataclasses import field
 from pathlib import Path
 from typing import Any
 
@@ -15,14 +16,25 @@ class CameraConfig:
 
 
 @dataclass(frozen=True)
+class ScreenCropConfig:
+    x: int = 100
+    y: int = 100
+    width: int = 640
+    height: int = 360
+    backend: str = "auto"
+
+
+@dataclass(frozen=True)
 class PreviewConfig:
-    window_name: str = "WhatsApp Interactive Motion - Webcam Preview"
+    webcam_window_name: str = "WhatsApp Interactive Motion - Webcam Preview"
+    crop_window_name: str = "WhatsApp Interactive Motion - WhatsApp Crop Preview"
 
 
 @dataclass(frozen=True)
 class AppConfig:
-    camera: CameraConfig = CameraConfig()
-    preview: PreviewConfig = PreviewConfig()
+    camera: CameraConfig = field(default_factory=CameraConfig)
+    screen_crop: ScreenCropConfig = field(default_factory=ScreenCropConfig)
+    preview: PreviewConfig = field(default_factory=PreviewConfig)
 
 
 def load_config(path: str | Path = "config.json") -> AppConfig:
@@ -32,6 +44,7 @@ def load_config(path: str | Path = "config.json") -> AppConfig:
 
     raw = json.loads(config_path.read_text(encoding="utf-8"))
     camera = _section(raw, "camera")
+    screen_crop = _section(raw, "screen_crop")
     preview = _section(raw, "preview")
 
     return AppConfig(
@@ -41,13 +54,26 @@ def load_config(path: str | Path = "config.json") -> AppConfig:
             height=int(camera.get("height", 720)),
             fps=int(camera.get("fps", 30)),
         ),
+        screen_crop=ScreenCropConfig(
+            x=int(screen_crop.get("x", 100)),
+            y=int(screen_crop.get("y", 100)),
+            width=int(screen_crop.get("width", 640)),
+            height=int(screen_crop.get("height", 360)),
+            backend=str(screen_crop.get("backend", "auto")),
+        ),
         preview=PreviewConfig(
-            window_name=str(
+            webcam_window_name=str(
                 preview.get(
-                    "window_name",
+                    "webcam_window_name",
                     "WhatsApp Interactive Motion - Webcam Preview",
                 )
-            )
+            ),
+            crop_window_name=str(
+                preview.get(
+                    "crop_window_name",
+                    "WhatsApp Interactive Motion - WhatsApp Crop Preview",
+                )
+            ),
         ),
     )
 
