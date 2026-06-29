@@ -6,6 +6,7 @@ MVP pendamping WhatsApp Desktop untuk membaca gesture lawan bicara dan memunculk
 
 - Fase 1: skeleton app + webcam preview.
 - Fase 2: manual screen crop preview untuk area video lawan bicara di WhatsApp.
+- Fase 3: gesture detection dari crop WhatsApp.
 
 ## Setup
 
@@ -64,3 +65,41 @@ Nilai default crop ada di `config.json`:
 ```
 
 Backend `auto` akan mencoba `dxcam` lebih dulu, lalu fallback ke `mss`.
+
+## Setup Model Gesture
+
+MediaPipe Gesture Recognizer butuh model `.task` lokal:
+
+```powershell
+.\scripts\download_gesture_model.ps1
+```
+
+File model akan disimpan ke:
+
+```text
+models/gesture_recognizer.task
+```
+
+File `.task` tidak masuk git karena ukurannya relatif besar.
+
+## Run Fase 3
+
+Gesture detection aktif otomatis di mode `crop` dan `dual` kalau model sudah ada:
+
+```powershell
+python -m app.main --mode crop
+```
+
+Gesture yang ditampilkan:
+
+- `Open Palm`
+- `Fist`
+- `Thumbs Up`
+- `Victory`
+- `OK Sign`
+
+Kalau ingin tes crop tanpa gesture detection:
+
+```powershell
+python -m app.main --mode crop --disable-gesture-detection
+```

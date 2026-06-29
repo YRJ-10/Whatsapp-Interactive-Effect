@@ -8,6 +8,8 @@ import cv2
 from app.capture.webcam import WebcamCapture, WebcamSettings
 from app.capture.whatsapp_crop import ScreenCropCapture, ScreenCropSettings
 from app.config import load_config
+from app.vision.gesture_detector import create_gesture_detector
+from app.vision.gesture_result import GestureResult
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,6 +37,13 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Screen capture backend. 'auto' tries dxcam first, then mss.",
     )
+    parser.add_argument(
+        "--disable-gesture-detection",
+        action="store_true",
+        help="Run crop preview without MediaPipe gesture detection.",
+    )
+    parser.add_argument("--gesture-model", default=None, help="Path to .task model.")
+    parser.add_argument("--gesture-min-score", type=float, default=None)
     return parser.parse_args()
 
 
@@ -44,6 +53,7 @@ def main() -> int:
 
     webcam_settings = _webcam_settings_from_args(args, config.camera)
     crop_settings = _crop_settings_from_args(args, config.screen_crop)
+    gesture_settings = _gesture_settings_from_args(args, config.gesture)
 
     print(f"Starting preview mode: {args.mode}.")
     print("Press q or Esc in the preview window to stop.")
@@ -52,11 +62,16 @@ def main() -> int:
         if args.mode == "webcam":
             _run_webcam_preview(webcam_settings, config.preview.webcam_window_name)
         elif args.mode == "crop":
-            _run_crop_preview(crop_settings, config.preview.crop_window_name)
+            _run_crop_preview(
+                crop_settings,
+                gesture_settings,
+                config.preview.crop_window_name,
+            )
         else:
             _run_dual_preview(
                 webcam_settings,
                 crop_settings,
+                gesture_settings,
                 config.preview.webcam_window_name,
                 config.preview.crop_window_name,
             )
@@ -89,6 +104,20 @@ def _crop_settings_from_args(args, crop_config) -> ScreenCropSettings:
     )
 
 
+def _gesture_settings_from_args(args, gesture_config) -> dict[str, object]:
+    return {
+        "enabled": bool(gesture_config.enabled)
+        and not args.disable_gesture_detection,
+        "model_path": args.gesture_model
+        if args.gesture_model is not None
+        else gesture_config.model_path,
+        "min_score": args.gesture_min_score
+        if args.gesture_min_score is not None
+        else gesture_config.min_score,
+        "enable_ok_sign": gesture_config.enable_ok_sign,
+    }
+
+
 def _run_webcam_preview(settings: WebcamSettings, window_name: str) -> None:
     fps_meter = FpsMeter()
     with WebcamCapture(settings) as webcam:
@@ -105,25 +134,35 @@ def _run_webcam_preview(settings: WebcamSettings, window_name: str) -> None:
                 break
 
 
-def _run_crop_preview(settings: ScreenCropSettings, window_name: str) -> None:
+def _run_crop_preview(
+    settings: ScreenCropSettings,
+    gesture_settings: dict[str, object],
+    window_name: str,
+) -> None:
     fps_meter = FpsMeter()
     with ScreenCropCapture(settings) as screen_crop:
-        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        detector = create_gesture_detector(**gesture_settings)
+        try:
+            cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
-        while True:
-            frame = screen_crop.read()
-            measured_fps = fps_meter.tick()
+            while True:
+                frame = screen_crop.read()
+                measured_fps = fps_meter.tick()
+                gesture = detector.detect(frame)
 
-            _draw_crop_status(frame, measured_fps, settings)
-            cv2.imshow(window_name, frame)
+                _draw_crop_status(frame, measured_fps, settings, gesture)
+                cv2.imshow(window_name, frame)
 
-            if _should_quit():
-                break
+                if _should_quit():
+                    break
+        finally:
+            detector.close()
 
 
 def _run_dual_preview(
     webcam_settings: WebcamSettings,
     crop_settings: ScreenCropSettings,
+    gesture_settings: dict[str, object],
     webcam_window_name: str,
     crop_window_name: str,
 ) -> None:
@@ -132,25 +171,35 @@ def _run_dual_preview(
 
     with WebcamCapture(webcam_settings) as webcam:
         with ScreenCropCapture(crop_settings) as screen_crop:
-            cv2.namedWindow(webcam_window_name, cv2.WINDOW_NORMAL)
-            cv2.namedWindow(crop_window_name, cv2.WINDOW_NORMAL)
+            detector = create_gesture_detector(**gesture_settings)
+            try:
+                cv2.namedWindow(webcam_window_name, cv2.WINDOW_NORMAL)
+                cv2.namedWindow(crop_window_name, cv2.WINDOW_NORMAL)
 
-            while True:
-                webcam_frame = webcam.read()
-                crop_frame = screen_crop.read()
+                while True:
+                    webcam_frame = webcam.read()
+                    crop_frame = screen_crop.read()
+                    gesture = detector.detect(crop_frame)
 
-                _draw_webcam_status(
-                    webcam_frame,
-                    webcam_fps.tick(),
-                    webcam_settings,
-                )
-                _draw_crop_status(crop_frame, crop_fps.tick(), crop_settings)
+                    _draw_webcam_status(
+                        webcam_frame,
+                        webcam_fps.tick(),
+                        webcam_settings,
+                    )
+                    _draw_crop_status(
+                        crop_frame,
+                        crop_fps.tick(),
+                        crop_settings,
+                        gesture,
+                    )
 
-                cv2.imshow(webcam_window_name, webcam_frame)
-                cv2.imshow(crop_window_name, crop_frame)
+                    cv2.imshow(webcam_window_name, webcam_frame)
+                    cv2.imshow(crop_window_name, crop_frame)
 
-                if _should_quit():
-                    break
+                    if _should_quit():
+                        break
+            finally:
+                detector.close()
 
 
 class FpsMeter:
@@ -191,16 +240,21 @@ def _draw_crop_status(
     frame,
     measured_fps: float,
     settings: ScreenCropSettings,
+    gesture: GestureResult | None = None,
 ) -> None:
     status = (
         f"Crop x={settings.x} y={settings.y} {settings.width}x{settings.height}"
         f" | {settings.backend} | measured {measured_fps:.1f} FPS"
     )
     _draw_status_bar(frame, status)
+    if gesture is not None:
+        _draw_gesture_status(frame, gesture)
 
 
 def _draw_status_bar(frame, status: str) -> None:
-    cv2.rectangle(frame, (12, 12), (930, 54), (0, 0, 0), thickness=-1)
+    frame_width = frame.shape[1]
+    right = min(frame_width - 12, 930)
+    cv2.rectangle(frame, (12, 12), (right, 54), (0, 0, 0), thickness=-1)
     cv2.putText(
         frame,
         status,
@@ -208,6 +262,32 @@ def _draw_status_bar(frame, status: str) -> None:
         cv2.FONT_HERSHEY_SIMPLEX,
         0.72,
         (255, 255, 255),
+        2,
+        cv2.LINE_AA,
+    )
+
+
+def _draw_gesture_status(frame, gesture: GestureResult) -> None:
+    if gesture.name == "Unavailable":
+        status = f"Gesture: unavailable | {gesture.source[:80]}"
+        color = (64, 220, 255)
+    else:
+        status = (
+            f"Gesture: {gesture.display_name}"
+            f" | score {gesture.score:.2f} | {gesture.source}"
+        )
+        color = (64, 255, 64) if gesture.name != "None" else (190, 190, 190)
+
+    frame_width = frame.shape[1]
+    right = min(frame_width - 12, 930)
+    cv2.rectangle(frame, (12, 62), (right, 104), (0, 0, 0), thickness=-1)
+    cv2.putText(
+        frame,
+        status,
+        (24, 90),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.72,
+        color,
         2,
         cv2.LINE_AA,
     )

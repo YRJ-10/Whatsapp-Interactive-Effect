@@ -12,6 +12,12 @@
     "height": 360,
     "backend": "auto"
   },
+  "gesture": {
+    "enabled": true,
+    "model_path": "models/gesture_recognizer.task",
+    "min_score": 0.55,
+    "enable_ok_sign": true
+  },
   "preview": {
     "webcam_window_name": "WhatsApp Interactive Motion - Webcam Preview",
     "crop_window_name": "WhatsApp Interactive Motion - WhatsApp Crop Preview"

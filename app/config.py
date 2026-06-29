@@ -25,6 +25,14 @@ class ScreenCropConfig:
 
 
 @dataclass(frozen=True)
+class GestureConfig:
+    enabled: bool = True
+    model_path: str = "models/gesture_recognizer.task"
+    min_score: float = 0.55
+    enable_ok_sign: bool = True
+
+
+@dataclass(frozen=True)
 class PreviewConfig:
     webcam_window_name: str = "WhatsApp Interactive Motion - Webcam Preview"
     crop_window_name: str = "WhatsApp Interactive Motion - WhatsApp Crop Preview"
@@ -34,6 +42,7 @@ class PreviewConfig:
 class AppConfig:
     camera: CameraConfig = field(default_factory=CameraConfig)
     screen_crop: ScreenCropConfig = field(default_factory=ScreenCropConfig)
+    gesture: GestureConfig = field(default_factory=GestureConfig)
     preview: PreviewConfig = field(default_factory=PreviewConfig)
 
 
@@ -45,6 +54,7 @@ def load_config(path: str | Path = "config.json") -> AppConfig:
     raw = json.loads(config_path.read_text(encoding="utf-8"))
     camera = _section(raw, "camera")
     screen_crop = _section(raw, "screen_crop")
+    gesture = _section(raw, "gesture")
     preview = _section(raw, "preview")
 
     return AppConfig(
@@ -60,6 +70,12 @@ def load_config(path: str | Path = "config.json") -> AppConfig:
             width=int(screen_crop.get("width", 640)),
             height=int(screen_crop.get("height", 360)),
             backend=str(screen_crop.get("backend", "auto")),
+        ),
+        gesture=GestureConfig(
+            enabled=_as_bool(gesture.get("enabled", True)),
+            model_path=str(gesture.get("model_path", "models/gesture_recognizer.task")),
+            min_score=float(gesture.get("min_score", 0.55)),
+            enable_ok_sign=_as_bool(gesture.get("enable_ok_sign", True)),
         ),
         preview=PreviewConfig(
             webcam_window_name=str(
@@ -83,3 +99,11 @@ def _section(raw: dict[str, Any], name: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {}
     return value
+
+
+def _as_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in {"1", "true", "yes", "on"}
+    return bool(value)
