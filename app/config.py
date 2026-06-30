@@ -47,6 +47,7 @@ class VirtualCameraConfig:
     height: int = 720
     fps: int = 30
     enabled_preview: bool = True
+    backend: str = "auto"
 
 
 @dataclass(frozen=True)
@@ -110,6 +111,7 @@ def load_config(path: str | Path = "config.json") -> AppConfig:
             height=int(virtual_camera.get("height", 720)),
             fps=int(virtual_camera.get("fps", 30)),
             enabled_preview=_as_bool(virtual_camera.get("enabled_preview", True)),
+            backend=str(virtual_camera.get("backend", "auto")),
         ),
         preview=PreviewConfig(
             webcam_window_name=str(

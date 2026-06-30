@@ -29,7 +29,8 @@
     "width": 1280,
     "height": 720,
     "fps": 30,
-    "enabled_preview": true
+    "enabled_preview": true,
+    "backend": "auto"
   },
   "preview": {
     "webcam_window_name": "WhatsApp Interactive Motion - Webcam Preview",

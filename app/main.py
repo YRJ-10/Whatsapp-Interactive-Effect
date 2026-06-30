@@ -65,6 +65,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--virtual-height", type=int, default=None)
     parser.add_argument("--virtual-fps", type=int, default=None)
     parser.add_argument(
+        "--virtual-backend",
+        choices=("auto", "obs", "unitycapture"),
+        default=None,
+    )
+    parser.add_argument(
         "--no-virtual-preview",
         action="store_true",
         help="Send to virtual camera without showing local preview windows.",
@@ -189,6 +194,9 @@ def _virtual_settings_from_args(args, virtual_config) -> VirtualCameraSettings:
         if args.virtual_height is not None
         else virtual_config.height,
         fps=args.virtual_fps if args.virtual_fps is not None else virtual_config.fps,
+        backend=args.virtual_backend
+        if args.virtual_backend is not None
+        else virtual_config.backend,
     )
 
 

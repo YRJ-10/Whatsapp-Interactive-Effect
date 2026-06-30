@@ -12,6 +12,7 @@ class VirtualCameraSettings:
     width: int
     height: int
     fps: int
+    backend: str = "auto"
 
 
 class VirtualCameraOutput:
@@ -33,10 +34,12 @@ class VirtualCameraOutput:
             ) from exc
 
         try:
+            backend = None if self.settings.backend == "auto" else self.settings.backend
             self._camera = pyvirtualcam.Camera(
                 width=self.settings.width,
                 height=self.settings.height,
                 fps=self.settings.fps,
+                backend=backend,
             )
         except Exception as exc:
             raise RuntimeError(
