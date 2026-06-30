@@ -200,7 +200,7 @@ def _run_webcam_preview(
 ) -> None:
     fps_meter = FpsMeter()
     effect_engine = EffectEngine(effects_settings)
-    _trigger_demo_effect(effect_engine, demo_effect)
+    demo_triggered = False
 
     with WebcamCapture(settings) as webcam:
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
@@ -208,6 +208,10 @@ def _run_webcam_preview(
         while True:
             frame = webcam.read()
             now_ms = _now_ms()
+            if not demo_triggered:
+                _trigger_demo_effect(effect_engine, demo_effect, now_ms)
+                demo_triggered = True
+
             frame = effect_engine.apply(frame, now_ms)
             measured_fps = fps_meter.tick()
 
@@ -264,7 +268,7 @@ def _run_dual_preview(
     webcam_fps = FpsMeter()
     crop_fps = FpsMeter()
     effect_engine = EffectEngine(effects_settings)
-    _trigger_demo_effect(effect_engine, demo_effect)
+    demo_triggered = False
 
     with WebcamCapture(webcam_settings) as webcam:
         with ScreenCropCapture(crop_settings) as screen_crop:
@@ -278,6 +282,10 @@ def _run_dual_preview(
                     webcam_frame = webcam.read()
                     crop_frame = screen_crop.read()
                     now_ms = _now_ms()
+                    if not demo_triggered:
+                        _trigger_demo_effect(effect_engine, demo_effect, now_ms)
+                        demo_triggered = True
+
                     gesture = detector.detect(crop_frame)
                     event = stabilizer.update(gesture, now_ms)
                     effect_engine.trigger(event)
@@ -320,7 +328,7 @@ def _run_virtual_camera_pipeline(
     webcam_fps = FpsMeter()
     crop_fps = FpsMeter()
     effect_engine = EffectEngine(effects_settings)
-    _trigger_demo_effect(effect_engine, demo_effect)
+    demo_triggered = False
 
     with WebcamCapture(webcam_settings) as webcam:
         with ScreenCropCapture(crop_settings) as screen_crop:
@@ -336,6 +344,10 @@ def _run_virtual_camera_pipeline(
                         webcam_frame = webcam.read()
                         crop_frame = screen_crop.read()
                         now_ms = _now_ms()
+                        if not demo_triggered:
+                            _trigger_demo_effect(effect_engine, demo_effect, now_ms)
+                            demo_triggered = True
+
                         gesture = detector.detect(crop_frame)
                         event = stabilizer.update(gesture, now_ms)
                         effect_engine.trigger(event)
@@ -406,11 +418,11 @@ def _create_stabilizer_from_settings(
 def _trigger_demo_effect(
     effect_engine: EffectEngine,
     gesture_name: str | None,
+    now_ms: int,
 ) -> None:
     if gesture_name is None:
         return
 
-    now_ms = _now_ms()
     effect_engine.trigger(
         GestureEvent(
             gesture=GestureResult(
