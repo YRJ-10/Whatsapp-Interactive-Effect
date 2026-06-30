@@ -168,6 +168,19 @@ python -m app.main --mode dual --effect-duration-ms 1800
 
 Fase 6 memakai OBS + DroidCam OBS Virtual Output agar video Python muncul sebagai kamera di WhatsApp.
 
+Cara paling mudah:
+
+```powershell
+.\start_launcher.bat
+```
+
+Di launcher:
+
+1. Pilih kamera.
+2. Pilih resolusi.
+3. Klik `Pilih Area Tangkapan` kalau area WhatsApp berubah.
+4. Klik `Start App`.
+
 Jalankan output bersih dari app Python dan pilih area video lawan bicara:
 
 ```powershell
