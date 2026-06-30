@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 import time
+from pathlib import Path
 
 import cv2
 
+from app.capture.crop_selector import select_screen_crop
 from app.capture.webcam import WebcamCapture, WebcamSettings
 from app.capture.whatsapp_crop import ScreenCropCapture, ScreenCropSettings
 from app.config import load_config
@@ -79,6 +82,16 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Show final webcam+effects output without debug text in dual mode.",
     )
+    parser.add_argument(
+        "--select-crop",
+        action="store_true",
+        help="Select the WhatsApp caller video crop with the mouse before running.",
+    )
+    parser.add_argument(
+        "--save-crop",
+        action="store_true",
+        help="Save the selected crop to the config file. Use with --select-crop.",
+    )
     return parser.parse_args()
 
 
@@ -88,6 +101,10 @@ def main() -> int:
 
     webcam_settings = _webcam_settings_from_args(args, config.camera)
     crop_settings = _crop_settings_from_args(args, config.screen_crop)
+    if args.select_crop and args.mode != "webcam":
+        crop_settings = select_screen_crop(crop_settings)
+        if args.save_crop:
+            _save_crop_settings(args.config, crop_settings)
     gesture_settings = _gesture_settings_from_args(args, config.gesture)
     effects_settings = _effects_settings_from_args(args, config.effects)
     virtual_settings = _virtual_settings_from_args(args, config.virtual_camera)
@@ -159,6 +176,27 @@ def _crop_settings_from_args(args, crop_config) -> ScreenCropSettings:
         if args.crop_backend is not None
         else crop_config.backend,
     )
+
+
+def _save_crop_settings(config_path: str, settings: ScreenCropSettings) -> None:
+    path = Path(config_path)
+    if path.exists():
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    else:
+        raw = {}
+
+    if not isinstance(raw, dict):
+        raw = {}
+
+    raw["screen_crop"] = {
+        "x": settings.x,
+        "y": settings.y,
+        "width": settings.width,
+        "height": settings.height,
+        "backend": settings.backend,
+    }
+    path.write_text(json.dumps(raw, indent=2) + "\n", encoding="utf-8")
+    print(f"Saved crop settings to {path}.")
 
 
 def _gesture_settings_from_args(args, gesture_config) -> dict[str, object]:
