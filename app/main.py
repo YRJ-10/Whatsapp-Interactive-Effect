@@ -52,6 +52,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gesture-min-score", type=float, default=None)
     parser.add_argument("--stable-frames", type=int, default=None)
     parser.add_argument("--gesture-cooldown-ms", type=int, default=None)
+    parser.add_argument("--gesture-detect-every", type=int, default=None)
+    parser.add_argument("--gesture-max-input-size", type=int, default=None)
     parser.add_argument(
         "--disable-effects",
         action="store_true",
@@ -216,6 +218,18 @@ def _gesture_settings_from_args(args, gesture_config) -> dict[str, object]:
         "cooldown_ms": args.gesture_cooldown_ms
         if args.gesture_cooldown_ms is not None
         else gesture_config.cooldown_ms,
+        "detection_interval_frames": max(
+            1,
+            args.gesture_detect_every
+            if args.gesture_detect_every is not None
+            else gesture_config.detection_interval_frames,
+        ),
+        "max_input_size": max(
+            0,
+            args.gesture_max_input_size
+            if args.gesture_max_input_size is not None
+            else gesture_config.max_input_size,
+        ),
     }
 
 
@@ -280,6 +294,10 @@ def _run_crop_preview(
     window_name: str,
 ) -> None:
     fps_meter = FpsMeter()
+    detector_step = _gesture_detection_interval(gesture_settings)
+    frame_index = 0
+    gesture = NO_GESTURE
+    event = None
     with ScreenCropCapture(settings) as screen_crop:
         detector = _create_detector_from_settings(gesture_settings)
         stabilizer = _create_stabilizer_from_settings(gesture_settings)
@@ -289,8 +307,10 @@ def _run_crop_preview(
             while True:
                 frame = screen_crop.read()
                 measured_fps = fps_meter.tick()
-                gesture = detector.detect(frame)
-                event = stabilizer.update(gesture, _now_ms())
+                frame_index += 1
+                if frame_index % detector_step == 0:
+                    gesture = detector.detect(_gesture_input_frame(frame, gesture_settings))
+                    event = stabilizer.update(gesture, _now_ms())
 
                 _draw_crop_status(
                     frame,
@@ -322,6 +342,10 @@ def _run_dual_preview(
     crop_fps = FpsMeter()
     effect_engine = EffectEngine(effects_settings)
     demo_triggered = False
+    detector_step = _gesture_detection_interval(gesture_settings)
+    frame_index = 0
+    gesture = NO_GESTURE
+    event = None
     output_window_name = (
         "WhatsApp Interactive Motion - Clean Output"
         if clean_output
@@ -344,9 +368,13 @@ def _run_dual_preview(
                         _trigger_demo_effect(effect_engine, demo_effect, now_ms)
                         demo_triggered = True
 
-                    gesture = detector.detect(crop_frame)
-                    event = stabilizer.update(gesture, now_ms)
-                    effect_engine.trigger(event)
+                    frame_index += 1
+                    if frame_index % detector_step == 0:
+                        gesture = detector.detect(
+                            _gesture_input_frame(crop_frame, gesture_settings)
+                        )
+                        event = stabilizer.update(gesture, now_ms)
+                        effect_engine.trigger(event)
                     webcam_frame = effect_engine.apply(webcam_frame, now_ms)
 
                     measured_webcam_fps = webcam_fps.tick()
@@ -389,6 +417,10 @@ def _run_virtual_camera_pipeline(
     crop_fps = FpsMeter()
     effect_engine = EffectEngine(effects_settings)
     demo_triggered = False
+    detector_step = _gesture_detection_interval(gesture_settings)
+    frame_index = 0
+    gesture = NO_GESTURE
+    event = None
 
     with WebcamCapture(webcam_settings) as webcam:
         with ScreenCropCapture(crop_settings) as screen_crop:
@@ -408,9 +440,13 @@ def _run_virtual_camera_pipeline(
                             _trigger_demo_effect(effect_engine, demo_effect, now_ms)
                             demo_triggered = True
 
-                        gesture = detector.detect(crop_frame)
-                        event = stabilizer.update(gesture, now_ms)
-                        effect_engine.trigger(event)
+                        frame_index += 1
+                        if frame_index % detector_step == 0:
+                            gesture = detector.detect(
+                                _gesture_input_frame(crop_frame, gesture_settings)
+                            )
+                            event = stabilizer.update(gesture, now_ms)
+                            effect_engine.trigger(event)
                         webcam_frame = effect_engine.apply(webcam_frame, now_ms)
                         output_frame = webcam_frame.copy()
 
@@ -463,6 +499,30 @@ def _create_detector_from_settings(gesture_settings: dict[str, object]):
         model_path=str(gesture_settings["model_path"]),
         min_score=float(gesture_settings["min_score"]),
         enable_ok_sign=bool(gesture_settings["enable_ok_sign"]),
+    )
+
+
+def _gesture_detection_interval(gesture_settings: dict[str, object]) -> int:
+    return max(1, int(gesture_settings["detection_interval_frames"]))
+
+
+def _gesture_input_frame(frame, gesture_settings: dict[str, object]):
+    max_size = int(gesture_settings["max_input_size"])
+    if max_size <= 0:
+        return frame
+
+    height, width = frame.shape[:2]
+    largest_side = max(width, height)
+    if largest_side <= max_size:
+        return frame
+
+    scale = max_size / largest_side
+    resized_width = max(1, int(width * scale))
+    resized_height = max(1, int(height * scale))
+    return cv2.resize(
+        frame,
+        (resized_width, resized_height),
+        interpolation=cv2.INTER_AREA,
     )
 
 

@@ -1,15 +1,15 @@
 {
   "camera": {
-    "index": 0,
-    "width": 1280,
-    "height": 720,
+    "index": 2,
+    "width": 960,
+    "height": 540,
     "fps": 30
   },
   "screen_crop": {
-    "x": 47,
-    "y": 12,
-    "width": 889,
-    "height": 1007,
+    "x": 75,
+    "y": 73,
+    "width": 974,
+    "height": 646,
     "backend": "mss"
   },
   "gesture": {
@@ -18,7 +18,9 @@
     "min_score": 0.55,
     "enable_ok_sign": true,
     "stable_frames": 4,
-    "cooldown_ms": 1200
+    "cooldown_ms": 1200,
+    "detection_interval_frames": 2,
+    "max_input_size": 640
   },
   "effects": {
     "enabled": true,

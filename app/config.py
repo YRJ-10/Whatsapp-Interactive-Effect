@@ -32,6 +32,8 @@ class GestureConfig:
     enable_ok_sign: bool = True
     stable_frames: int = 4
     cooldown_ms: int = 1200
+    detection_interval_frames: int = 2
+    max_input_size: int = 640
 
 
 @dataclass(frozen=True)
@@ -100,6 +102,11 @@ def load_config(path: str | Path = "config.json") -> AppConfig:
             enable_ok_sign=_as_bool(gesture.get("enable_ok_sign", True)),
             stable_frames=int(gesture.get("stable_frames", 4)),
             cooldown_ms=int(gesture.get("cooldown_ms", 1200)),
+            detection_interval_frames=max(
+                1,
+                int(gesture.get("detection_interval_frames", 2)),
+            ),
+            max_input_size=max(0, int(gesture.get("max_input_size", 640))),
         ),
         effects=EffectsConfig(
             enabled=_as_bool(effects.get("enabled", True)),

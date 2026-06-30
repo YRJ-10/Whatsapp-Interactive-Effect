@@ -5,6 +5,7 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
+from tkinter import BooleanVar
 from tkinter import StringVar
 from tkinter import Tk
 from tkinter import messagebox
@@ -27,12 +28,17 @@ class LauncherApp:
 
         camera = self.config.get("camera", {})
         crop = self.config.get("screen_crop", {})
+        effects = self.config.get("effects", {})
 
         self.camera_index = StringVar(value=str(camera.get("index", 0)))
         width = int(camera.get("width", 960))
         height = int(camera.get("height", 540))
         self.resolution = StringVar(value=f"{width}x{height}")
         self.fps = StringVar(value=str(camera.get("fps", 30)))
+        effect_enabled = True
+        if isinstance(effects, dict):
+            effect_enabled = bool(effects.get("enabled", True))
+        self.effects_enabled = BooleanVar(value=effect_enabled)
         self.crop_text = StringVar(value=self._format_crop(crop))
         self.status = StringVar(value="Siap.")
 
@@ -41,8 +47,8 @@ class LauncherApp:
 
     def _build_ui(self) -> None:
         self.root.title("WhatsApp Interactive Motion Launcher")
-        self.root.geometry("520x360")
-        self.root.minsize(480, 330)
+        self.root.geometry("520x390")
+        self.root.minsize(480, 360)
 
         main = ttk.Frame(self.root, padding=14)
         main.grid(row=0, column=0, sticky="nsew")
@@ -78,15 +84,23 @@ class LauncherApp:
             values=["15", "24", "30", "60"],
         ).grid(row=2, column=1, sticky="ew", pady=4)
 
-        ttk.Separator(main).grid(row=3, column=0, columnspan=2, sticky="ew", pady=12)
+        ttk.Label(main, text="Efek").grid(row=3, column=0, sticky="w", pady=4)
+        ttk.Checkbutton(
+            main,
+            text="Aktifkan efek gesture",
+            variable=self.effects_enabled,
+            command=self._save_settings,
+        ).grid(row=3, column=1, sticky="w", pady=4)
 
-        ttk.Label(main, text="Crop").grid(row=4, column=0, sticky="w", pady=4)
+        ttk.Separator(main).grid(row=4, column=0, columnspan=2, sticky="ew", pady=12)
+
+        ttk.Label(main, text="Crop").grid(row=5, column=0, sticky="w", pady=4)
         ttk.Label(main, textvariable=self.crop_text).grid(
-            row=4, column=1, sticky="w", pady=4
+            row=5, column=1, sticky="w", pady=4
         )
 
         crop_buttons = ttk.Frame(main)
-        crop_buttons.grid(row=5, column=0, columnspan=2, sticky="ew", pady=4)
+        crop_buttons.grid(row=6, column=0, columnspan=2, sticky="ew", pady=4)
         crop_buttons.columnconfigure(0, weight=1)
         crop_buttons.columnconfigure(1, weight=1)
         ttk.Button(
@@ -101,7 +115,7 @@ class LauncherApp:
         ).grid(row=0, column=1, sticky="ew", padx=(6, 0))
 
         run_buttons = ttk.Frame(main)
-        run_buttons.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(14, 6))
+        run_buttons.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(14, 6))
         run_buttons.columnconfigure(0, weight=1)
         run_buttons.columnconfigure(1, weight=1)
         ttk.Button(run_buttons, text="Start App", command=self._start_app).grid(
@@ -116,10 +130,10 @@ class LauncherApp:
             "WhatsApp Camera: DroidCam Output"
         )
         ttk.Label(main, text=obs_text).grid(
-            row=7, column=0, columnspan=2, sticky="w", pady=(10, 2)
+            row=8, column=0, columnspan=2, sticky="w", pady=(10, 2)
         )
         ttk.Label(main, textvariable=self.status).grid(
-            row=8, column=0, columnspan=2, sticky="w", pady=(8, 0)
+            row=9, column=0, columnspan=2, sticky="w", pady=(8, 0)
         )
 
     def _load_config(self) -> dict[str, object]:
@@ -132,9 +146,13 @@ class LauncherApp:
         width, height = self._parse_resolution()
         self.config.setdefault("camera", {})
         self.config.setdefault("screen_crop", {})
+        self.config.setdefault("effects", {})
+        self.config.setdefault("gesture", {})
 
         camera = self.config["camera"]
         crop = self.config["screen_crop"]
+        effects = self.config["effects"]
+        gesture = self.config["gesture"]
         if isinstance(camera, dict):
             camera["index"] = int(self.camera_index.get())
             camera["width"] = width
@@ -142,6 +160,11 @@ class LauncherApp:
             camera["fps"] = int(self.fps.get())
         if isinstance(crop, dict):
             crop["backend"] = "mss"
+        if isinstance(effects, dict):
+            effects["enabled"] = bool(self.effects_enabled.get())
+        if isinstance(gesture, dict):
+            gesture.setdefault("detection_interval_frames", 2)
+            gesture.setdefault("max_input_size", 640)
 
         CONFIG_PATH.write_text(
             json.dumps(self.config, indent=2) + "\n",
@@ -205,6 +228,8 @@ class LauncherApp:
             "--crop-backend",
             "mss",
         ]
+        if not self.effects_enabled.get():
+            command.append("--disable-effects")
 
         creationflags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
         self.process = subprocess.Popen(

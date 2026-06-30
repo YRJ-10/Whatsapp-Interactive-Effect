@@ -178,8 +178,11 @@ Di launcher:
 
 1. Pilih kamera.
 2. Pilih resolusi.
-3. Klik `Pilih Area Tangkapan` kalau area WhatsApp berubah.
-4. Klik `Start App`.
+3. Aktifkan atau matikan efek gesture.
+4. Klik `Pilih Area Tangkapan` kalau area WhatsApp berubah.
+5. Klik `Start App`.
+
+Launcher memakai mode ringan default: deteksi gesture tiap 2 frame dan input MediaPipe diperkecil ke maksimal 640px.
 
 Jalankan output bersih dari app Python dan pilih area video lawan bicara:
 
