@@ -74,6 +74,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Send to virtual camera without showing local preview windows.",
     )
+    parser.add_argument(
+        "--clean-output",
+        action="store_true",
+        help="Show final webcam+effects output without debug text in dual mode.",
+    )
     return parser.parse_args()
 
 
@@ -113,6 +118,7 @@ def main() -> int:
                 args.demo_effect,
                 config.preview.webcam_window_name,
                 config.preview.crop_window_name,
+                args.clean_output,
             )
         else:
             _run_virtual_camera_pipeline(
@@ -272,18 +278,24 @@ def _run_dual_preview(
     demo_effect: str | None,
     webcam_window_name: str,
     crop_window_name: str,
+    clean_output: bool,
 ) -> None:
     webcam_fps = FpsMeter()
     crop_fps = FpsMeter()
     effect_engine = EffectEngine(effects_settings)
     demo_triggered = False
+    output_window_name = (
+        "WhatsApp Interactive Motion - Clean Output"
+        if clean_output
+        else webcam_window_name
+    )
 
     with WebcamCapture(webcam_settings) as webcam:
         with ScreenCropCapture(crop_settings) as screen_crop:
             detector = _create_detector_from_settings(gesture_settings)
             stabilizer = _create_stabilizer_from_settings(gesture_settings)
             try:
-                cv2.namedWindow(webcam_window_name, cv2.WINDOW_NORMAL)
+                cv2.namedWindow(output_window_name, cv2.WINDOW_NORMAL)
                 cv2.namedWindow(crop_window_name, cv2.WINDOW_NORMAL)
 
                 while True:
@@ -299,11 +311,13 @@ def _run_dual_preview(
                     effect_engine.trigger(event)
                     webcam_frame = effect_engine.apply(webcam_frame, now_ms)
 
-                    _draw_webcam_status(
-                        webcam_frame,
-                        webcam_fps.tick(),
-                        webcam_settings,
-                    )
+                    measured_webcam_fps = webcam_fps.tick()
+                    if not clean_output:
+                        _draw_webcam_status(
+                            webcam_frame,
+                            measured_webcam_fps,
+                            webcam_settings,
+                        )
                     _draw_crop_status(
                         crop_frame,
                         crop_fps.tick(),
@@ -313,7 +327,7 @@ def _run_dual_preview(
                         event,
                     )
 
-                    cv2.imshow(webcam_window_name, webcam_frame)
+                    cv2.imshow(output_window_name, webcam_frame)
                     cv2.imshow(crop_window_name, crop_frame)
 
                     if _should_quit():

@@ -166,37 +166,30 @@ python -m app.main --mode dual --effect-duration-ms 1800
 
 ## Run Fase 6
 
-Fase 6 mengirim video webcam yang sudah diberi efek ke virtual camera.
+Fase 6 memakai OBS + DroidCam OBS Virtual Output agar video Python muncul sebagai kamera di WhatsApp.
+
+Jalankan output bersih dari app Python:
+
+```powershell
+.\.venv\Scripts\python.exe -m app.main --mode dual --clean-output --camera-index 2 --width 960 --height 540 --fps 30 --crop-backend mss
+```
+
+Capture window bernama:
+
+```text
+WhatsApp Interactive Motion - Clean Output
+```
 
 Prasyarat Windows:
 
-- Install OBS Studio atau virtual camera provider lain yang kompatibel dengan `pyvirtualcam`.
-- Pastikan virtual camera tersedia di aplikasi video.
+- Install OBS Studio.
+- Install DroidCam OBS Virtual Output:
+  https://github.com/dev47apps/droidcam-obs-virtual-output/releases
 
-Jalankan pipeline penuh:
+Alur di OBS:
 
-```powershell
-python -m app.main --mode virtual
-```
-
-Setelah jalan, pilih virtual camera tersebut sebagai kamera di WhatsApp Desktop.
-
-Output yang dikirim ke virtual camera bersih dari teks debug. Window preview lokal tetap menampilkan status pipeline.
-
-Jalankan tanpa preview lokal:
-
-```powershell
-python -m app.main --mode virtual --no-virtual-preview
-```
-
-Atur resolusi output virtual camera:
-
-```powershell
-python -m app.main --mode virtual --virtual-width 1280 --virtual-height 720 --virtual-fps 30
-```
-
-Tes virtual camera dengan efek demo:
-
-```powershell
-python -m app.main --mode virtual --demo-effect Victory
-```
+1. Tambahkan source `Window Capture`.
+2. Pilih window `WhatsApp Interactive Motion - Clean Output`.
+3. Buka menu `Tools`.
+4. Aktifkan DroidCam virtual output.
+5. Di WhatsApp, pilih kamera DroidCam output.
