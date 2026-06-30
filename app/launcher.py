@@ -4,6 +4,7 @@ import json
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 from tkinter import BooleanVar
 from tkinter import StringVar
@@ -17,6 +18,8 @@ from app.capture.whatsapp_crop import ScreenCropSettings
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT_DIR / "config.json"
+RUNTIME_DIR = ROOT_DIR / ".runtime"
+EFFECT_TRIGGER_PATH = RUNTIME_DIR / "effect_trigger.json"
 OUTPUT_WINDOW_NAME = "WhatsApp Interactive Motion - Clean Output"
 
 
@@ -41,14 +44,17 @@ class LauncherApp:
         self.effects_enabled = BooleanVar(value=effect_enabled)
         self.crop_text = StringVar(value=self._format_crop(crop))
         self.status = StringVar(value="Siap.")
+        self.checklist = StringVar(value="")
 
         self._build_ui()
+        self._refresh_checklist()
+        self._refresh_loop()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _build_ui(self) -> None:
         self.root.title("WhatsApp Interactive Motion Launcher")
-        self.root.geometry("520x390")
-        self.root.minsize(480, 360)
+        self.root.geometry("560x530")
+        self.root.minsize(520, 500)
 
         main = ttk.Frame(self.root, padding=14)
         main.grid(row=0, column=0, sticky="nsew")
@@ -124,16 +130,36 @@ class LauncherApp:
         ttk.Button(run_buttons, text="Stop App", command=self._stop_app).grid(
             row=0, column=1, sticky="ew", padx=(6, 0)
         )
+        ttk.Button(run_buttons, text="Test Effect", command=self._test_effect).grid(
+            row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0)
+        )
+
+        ttk.Separator(main).grid(row=8, column=0, columnspan=2, sticky="ew", pady=12)
+
+        ttk.Label(main, text="Status").grid(row=9, column=0, sticky="nw", pady=4)
+        ttk.Label(main, textvariable=self.checklist).grid(
+            row=9, column=1, sticky="w", pady=4
+        )
+
+        mapping_text = (
+            "Open Palm -> Glow\n"
+            "Fist -> Impact\n"
+            "Thumbs Up -> LIKE\n"
+            "Victory -> Confetti\n"
+            "OK Sign -> OK Ring"
+        )
+        ttk.Label(main, text="Gesture").grid(row=10, column=0, sticky="nw", pady=4)
+        ttk.Label(main, text=mapping_text).grid(row=10, column=1, sticky="w", pady=4)
 
         obs_text = (
             f"OBS Window Capture: {OUTPUT_WINDOW_NAME}\n"
             "WhatsApp Camera: DroidCam Output"
         )
         ttk.Label(main, text=obs_text).grid(
-            row=8, column=0, columnspan=2, sticky="w", pady=(10, 2)
+            row=11, column=0, columnspan=2, sticky="w", pady=(10, 2)
         )
         ttk.Label(main, textvariable=self.status).grid(
-            row=9, column=0, columnspan=2, sticky="w", pady=(8, 0)
+            row=12, column=0, columnspan=2, sticky="w", pady=(8, 0)
         )
 
     def _load_config(self) -> dict[str, object]:
@@ -171,6 +197,7 @@ class LauncherApp:
             encoding="utf-8",
         )
         self.status.set("Setting tersimpan.")
+        self._refresh_checklist()
 
     def _select_crop(self) -> None:
         self._save_settings()
@@ -227,6 +254,8 @@ class LauncherApp:
             self.fps.get(),
             "--crop-backend",
             "mss",
+            "--effect-trigger-file",
+            str(EFFECT_TRIGGER_PATH),
         ]
         if not self.effects_enabled.get():
             command.append("--disable-effects")
@@ -238,13 +267,34 @@ class LauncherApp:
             creationflags=creationflags,
         )
         self.status.set("App berjalan. Capture Clean Output di OBS.")
+        self._refresh_checklist()
 
     def _stop_app(self) -> None:
         if self.process is None or self.process.poll() is not None:
             self.status.set("Tidak ada app yang berjalan.")
+            self._refresh_checklist()
             return
         self.process.terminate()
         self.status.set("App dihentikan.")
+        self._refresh_checklist()
+
+    def _test_effect(self) -> None:
+        if self.process is None or self.process.poll() is not None:
+            self.status.set("Start App dulu sebelum Test Effect.")
+            self._refresh_checklist()
+            return
+        if not self.effects_enabled.get():
+            self.status.set("Efek sedang OFF. Aktifkan efek dulu.")
+            self._refresh_checklist()
+            return
+
+        RUNTIME_DIR.mkdir(exist_ok=True)
+        EFFECT_TRIGGER_PATH.write_text(
+            json.dumps({"gesture": "Victory", "timestamp": time.time_ns()}),
+            encoding="utf-8",
+        )
+        self.status.set("Test Effect dikirim: Victory/confetti.")
+        self._refresh_checklist()
 
     def _scan_cameras(self) -> None:
         self.status.set("Scan kamera...")
@@ -282,6 +332,30 @@ class LauncherApp:
             f"x={crop.get('x', 0)}, y={crop.get('y', 0)}, "
             f"w={crop.get('width', 0)}, h={crop.get('height', 0)}"
         )
+
+    def _refresh_checklist(self) -> None:
+        app_running = self.process is not None and self.process.poll() is None
+        crop = self.config.get("screen_crop", {})
+        crop_ready = (
+            isinstance(crop, dict)
+            and int(crop.get("width", 0)) > 0
+            and int(crop.get("height", 0)) > 0
+        )
+        self.checklist.set(
+            "\n".join(
+                [
+                    f"App: {'RUNNING' if app_running else 'STOPPED'}",
+                    f"Efek: {'ON' if self.effects_enabled.get() else 'OFF'}",
+                    f"Crop: {'OK' if crop_ready else 'BELUM'}",
+                    f"OBS: {OUTPUT_WINDOW_NAME}",
+                    "WhatsApp: DroidCam Output",
+                ]
+            )
+        )
+
+    def _refresh_loop(self) -> None:
+        self._refresh_checklist()
+        self.root.after(1000, self._refresh_loop)
 
     def _on_close(self) -> None:
         self._stop_app()

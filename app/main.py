@@ -66,6 +66,11 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Trigger one effect at startup for preview testing.",
     )
+    parser.add_argument(
+        "--effect-trigger-file",
+        default=".runtime/effect_trigger.json",
+        help="Path used by launcher to trigger a test effect while running.",
+    )
     parser.add_argument("--virtual-width", type=int, default=None)
     parser.add_argument("--virtual-height", type=int, default=None)
     parser.add_argument("--virtual-fps", type=int, default=None)
@@ -138,6 +143,7 @@ def main() -> int:
                 config.preview.webcam_window_name,
                 config.preview.crop_window_name,
                 args.clean_output,
+                args.effect_trigger_file,
             )
         else:
             _run_virtual_camera_pipeline(
@@ -150,6 +156,7 @@ def main() -> int:
                 config.virtual_camera.enabled_preview and not args.no_virtual_preview,
                 config.preview.webcam_window_name,
                 config.preview.crop_window_name,
+                args.effect_trigger_file,
             )
     finally:
         cv2.destroyAllWindows()
@@ -337,6 +344,7 @@ def _run_dual_preview(
     webcam_window_name: str,
     crop_window_name: str,
     clean_output: bool,
+    effect_trigger_file: str,
 ) -> None:
     webcam_fps = FpsMeter()
     crop_fps = FpsMeter()
@@ -346,6 +354,7 @@ def _run_dual_preview(
     frame_index = 0
     gesture = NO_GESTURE
     event = None
+    trigger_watcher = EffectTriggerWatcher(effect_trigger_file)
     output_window_name = (
         "WhatsApp Interactive Motion - Clean Output"
         if clean_output
@@ -367,6 +376,11 @@ def _run_dual_preview(
                     if not demo_triggered:
                         _trigger_demo_effect(effect_engine, demo_effect, now_ms)
                         demo_triggered = True
+                    _trigger_demo_effect(
+                        effect_engine,
+                        trigger_watcher.poll(),
+                        now_ms,
+                    )
 
                     frame_index += 1
                     if frame_index % detector_step == 0:
@@ -412,6 +426,7 @@ def _run_virtual_camera_pipeline(
     enabled_preview: bool,
     webcam_window_name: str,
     crop_window_name: str,
+    effect_trigger_file: str,
 ) -> None:
     webcam_fps = FpsMeter()
     crop_fps = FpsMeter()
@@ -421,6 +436,7 @@ def _run_virtual_camera_pipeline(
     frame_index = 0
     gesture = NO_GESTURE
     event = None
+    trigger_watcher = EffectTriggerWatcher(effect_trigger_file)
 
     with WebcamCapture(webcam_settings) as webcam:
         with ScreenCropCapture(crop_settings) as screen_crop:
@@ -439,6 +455,11 @@ def _run_virtual_camera_pipeline(
                         if not demo_triggered:
                             _trigger_demo_effect(effect_engine, demo_effect, now_ms)
                             demo_triggered = True
+                        _trigger_demo_effect(
+                            effect_engine,
+                            trigger_watcher.poll(),
+                            now_ms,
+                        )
 
                         frame_index += 1
                         if frame_index % detector_step == 0:
@@ -491,6 +512,35 @@ class FpsMeter:
             self._frame_count = 0
             self._timer = now
         return self._measured_fps
+
+
+class EffectTriggerWatcher:
+    def __init__(self, path: str) -> None:
+        self.path = Path(path)
+        self._last_mtime_ns = 0
+
+    def poll(self) -> str | None:
+        try:
+            stat = self.path.stat()
+        except FileNotFoundError:
+            return None
+
+        if stat.st_mtime_ns == self._last_mtime_ns:
+            return None
+
+        self._last_mtime_ns = stat.st_mtime_ns
+        try:
+            raw = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+
+        if not isinstance(raw, dict):
+            return None
+
+        gesture = raw.get("gesture")
+        if gesture in {"Open_Palm", "Closed_Fist", "Thumb_Up", "Victory", "OK_Sign"}:
+            return str(gesture)
+        return None
 
 
 def _create_detector_from_settings(gesture_settings: dict[str, object]):
