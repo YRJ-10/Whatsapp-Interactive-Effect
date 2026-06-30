@@ -1,4 +1,3 @@
 @echo off
 cd /d "%~dp0"
-.\.venv\Scripts\python.exe -m app.launcher
-pause
+start "" .\.venv\Scripts\pythonw.exe -m app.launcher

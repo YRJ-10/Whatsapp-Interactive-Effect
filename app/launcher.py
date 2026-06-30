@@ -211,7 +211,7 @@ class LauncherApp:
         self._save_settings()
         width, height = self._parse_resolution()
         command = [
-            sys.executable,
+            _pythonw_executable(),
             "-m",
             "app.main",
             "--mode",
@@ -231,7 +231,7 @@ class LauncherApp:
         if not self.effects_enabled.get():
             command.append("--disable-effects")
 
-        creationflags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         self.process = subprocess.Popen(
             command,
             cwd=ROOT_DIR,
@@ -293,6 +293,14 @@ def main() -> int:
     LauncherApp(root)
     root.mainloop()
     return 0
+
+
+def _pythonw_executable() -> str:
+    executable = Path(sys.executable)
+    pythonw = executable.with_name("pythonw.exe")
+    if pythonw.exists():
+        return str(pythonw)
+    return str(executable)
 
 
 if __name__ == "__main__":

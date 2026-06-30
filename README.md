@@ -171,8 +171,10 @@ Fase 6 memakai OBS + DroidCam OBS Virtual Output agar video Python muncul sebaga
 Cara paling mudah:
 
 ```powershell
-.\start_launcher.bat
+.\start_launcher.vbs
 ```
+
+Pakai `start_launcher.vbs` agar tidak muncul terminal tambahan.
 
 Di launcher:
 
