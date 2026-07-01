@@ -183,8 +183,9 @@ Di launcher:
 3. Aktifkan atau matikan efek gesture.
 4. Set OBS path atau klik `Browse` kalau belum otomatis terisi.
 5. Aktifkan `Auto-open OBS saat Start App` jika perlu.
-6. Klik `Pilih Area Tangkapan` kalau area WhatsApp berubah.
-7. Klik `Start App`.
+6. Klik `Panduan Setup OBS` kalau perlu lihat langkah OBS.
+7. Klik `Pilih Area Tangkapan` kalau area WhatsApp berubah.
+8. Klik `Start App`.
 
 Launcher memakai mode ringan default: deteksi gesture tiap 2 frame dan input MediaPipe diperkecil ke maksimal 640px.
 

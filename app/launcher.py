@@ -9,6 +9,7 @@ from pathlib import Path
 from tkinter import BooleanVar
 from tkinter import StringVar
 from tkinter import Tk
+from tkinter import Toplevel
 from tkinter import filedialog
 from tkinter import messagebox
 from tkinter import ttk
@@ -68,8 +69,8 @@ class LauncherApp:
 
     def _build_ui(self) -> None:
         self.root.title("WhatsApp Interactive Motion Launcher")
-        self.root.geometry("620x620")
-        self.root.minsize(560, 560)
+        self.root.geometry("620x660")
+        self.root.minsize(560, 600)
 
         main = ttk.Frame(self.root, padding=14)
         main.grid(row=0, column=0, sticky="nsew")
@@ -136,6 +137,11 @@ class LauncherApp:
         ttk.Button(obs_buttons, text="Open OBS", command=self._open_obs).grid(
             row=0, column=1, sticky="ew", padx=(8, 0)
         )
+        ttk.Button(
+            obs_buttons,
+            text="Panduan Setup OBS",
+            command=self._show_obs_guide,
+        ).grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
 
         ttk.Separator(main).grid(row=7, column=0, columnspan=2, sticky="ew", pady=12)
 
@@ -347,6 +353,60 @@ class LauncherApp:
 
         self.status.set("OBS dibuka.")
         self._refresh_checklist()
+
+    def _show_obs_guide(self) -> None:
+        guide = Toplevel(self.root)
+        guide.title("Panduan Setup OBS")
+        guide.geometry("520x390")
+        guide.minsize(480, 360)
+        guide.transient(self.root)
+
+        frame = ttk.Frame(guide, padding=14)
+        frame.grid(row=0, column=0, sticky="nsew")
+        guide.columnconfigure(0, weight=1)
+        guide.rowconfigure(0, weight=1)
+        frame.columnconfigure(0, weight=1)
+
+        steps = (
+            "1. Di launcher, klik Start App.\n"
+            "2. Di OBS, tambah source Window Capture.\n"
+            f"3. Pilih window: {OUTPUT_WINDOW_NAME}\n"
+            "4. Pastikan preview OBS menampilkan video kamera efek.\n"
+            "5. Di OBS menu Tools, aktifkan DroidCam Virtual Output.\n"
+            "6. Di WhatsApp, pilih kamera DroidCam Output.\n"
+            "7. Klik Test Effect untuk memastikan jalur sudah benar."
+        )
+        ttk.Label(frame, text=steps, justify="left").grid(
+            row=0,
+            column=0,
+            sticky="w",
+        )
+
+        buttons = ttk.Frame(frame)
+        buttons.grid(row=1, column=0, sticky="ew", pady=(16, 0))
+        buttons.columnconfigure(0, weight=1)
+        buttons.columnconfigure(1, weight=1)
+        ttk.Button(
+            buttons,
+            text="Copy Window Name",
+            command=lambda: self._copy_text(OUTPUT_WINDOW_NAME),
+        ).grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        ttk.Button(
+            buttons,
+            text="Copy OBS Steps",
+            command=lambda: self._copy_text(steps),
+        ).grid(row=0, column=1, sticky="ew", padx=(6, 0))
+        ttk.Button(frame, text="Tutup", command=guide.destroy).grid(
+            row=2,
+            column=0,
+            sticky="ew",
+            pady=(12, 0),
+        )
+
+    def _copy_text(self, value: str) -> None:
+        self.root.clipboard_clear()
+        self.root.clipboard_append(value)
+        self.status.set("Teks disalin.")
 
     def _stop_app(self) -> None:
         if self.process is None or self.process.poll() is not None:
