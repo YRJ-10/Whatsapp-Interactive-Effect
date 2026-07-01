@@ -1,15 +1,15 @@
 {
   "camera": {
-    "index": 2,
+    "index": 0,
     "width": 960,
     "height": 540,
     "fps": 30
   },
   "screen_crop": {
-    "x": 75,
-    "y": 73,
-    "width": 974,
-    "height": 646,
+    "x": 100,
+    "y": 100,
+    "width": 640,
+    "height": 360,
     "backend": "mss"
   },
   "gesture": {
@@ -39,7 +39,7 @@
     "crop_window_name": "WhatsApp Interactive Motion - WhatsApp Crop Preview"
   },
   "obs": {
-    "path": "C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe",
-    "auto_open": true
+    "path": "",
+    "auto_open": false
   }
 }
