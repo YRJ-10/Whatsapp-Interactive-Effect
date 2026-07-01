@@ -9,6 +9,7 @@ from pathlib import Path
 from tkinter import BooleanVar
 from tkinter import StringVar
 from tkinter import Tk
+from tkinter import filedialog
 from tkinter import messagebox
 from tkinter import ttk
 
@@ -21,6 +22,10 @@ CONFIG_PATH = ROOT_DIR / "config.json"
 RUNTIME_DIR = ROOT_DIR / ".runtime"
 EFFECT_TRIGGER_PATH = RUNTIME_DIR / "effect_trigger.json"
 OUTPUT_WINDOW_NAME = "WhatsApp Interactive Motion - Clean Output"
+DEFAULT_OBS_PATHS = (
+    Path("C:/Program Files/obs-studio/bin/64bit/obs64.exe"),
+    Path("C:/Program Files (x86)/obs-studio/bin/64bit/obs64.exe"),
+)
 
 
 class LauncherApp:
@@ -32,6 +37,7 @@ class LauncherApp:
         camera = self.config.get("camera", {})
         crop = self.config.get("screen_crop", {})
         effects = self.config.get("effects", {})
+        obs = self.config.get("obs", {})
 
         self.camera_index = StringVar(value=str(camera.get("index", 0)))
         width = int(camera.get("width", 960))
@@ -42,6 +48,15 @@ class LauncherApp:
         if isinstance(effects, dict):
             effect_enabled = bool(effects.get("enabled", True))
         self.effects_enabled = BooleanVar(value=effect_enabled)
+        obs_path = ""
+        auto_open_obs = False
+        if isinstance(obs, dict):
+            obs_path = str(obs.get("path", ""))
+            auto_open_obs = bool(obs.get("auto_open", False))
+        if not obs_path:
+            obs_path = _detect_obs_path()
+        self.obs_path = StringVar(value=obs_path)
+        self.auto_open_obs = BooleanVar(value=auto_open_obs)
         self.crop_text = StringVar(value=self._format_crop(crop))
         self.status = StringVar(value="Siap.")
         self.checklist = StringVar(value="")
@@ -53,8 +68,8 @@ class LauncherApp:
 
     def _build_ui(self) -> None:
         self.root.title("WhatsApp Interactive Motion Launcher")
-        self.root.geometry("560x530")
-        self.root.minsize(520, 500)
+        self.root.geometry("620x620")
+        self.root.minsize(560, 560)
 
         main = ttk.Frame(self.root, padding=14)
         main.grid(row=0, column=0, sticky="nsew")
@@ -100,13 +115,37 @@ class LauncherApp:
 
         ttk.Separator(main).grid(row=4, column=0, columnspan=2, sticky="ew", pady=12)
 
-        ttk.Label(main, text="Crop").grid(row=5, column=0, sticky="w", pady=4)
+        ttk.Label(main, text="OBS").grid(row=5, column=0, sticky="w", pady=4)
+        obs_row = ttk.Frame(main)
+        obs_row.grid(row=5, column=1, sticky="ew", pady=4)
+        obs_row.columnconfigure(0, weight=1)
+        ttk.Entry(obs_row, textvariable=self.obs_path).grid(row=0, column=0, sticky="ew")
+        ttk.Button(obs_row, text="Browse", command=self._browse_obs).grid(
+            row=0, column=1, padx=(8, 0)
+        )
+        obs_buttons = ttk.Frame(main)
+        obs_buttons.grid(row=6, column=1, sticky="ew", pady=4)
+        obs_buttons.columnconfigure(0, weight=1)
+        obs_buttons.columnconfigure(1, weight=1)
+        ttk.Checkbutton(
+            obs_buttons,
+            text="Auto-open OBS saat Start App",
+            variable=self.auto_open_obs,
+            command=self._save_settings,
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Button(obs_buttons, text="Open OBS", command=self._open_obs).grid(
+            row=0, column=1, sticky="ew", padx=(8, 0)
+        )
+
+        ttk.Separator(main).grid(row=7, column=0, columnspan=2, sticky="ew", pady=12)
+
+        ttk.Label(main, text="Crop").grid(row=8, column=0, sticky="w", pady=4)
         ttk.Label(main, textvariable=self.crop_text).grid(
-            row=5, column=1, sticky="w", pady=4
+            row=8, column=1, sticky="w", pady=4
         )
 
         crop_buttons = ttk.Frame(main)
-        crop_buttons.grid(row=6, column=0, columnspan=2, sticky="ew", pady=4)
+        crop_buttons.grid(row=9, column=0, columnspan=2, sticky="ew", pady=4)
         crop_buttons.columnconfigure(0, weight=1)
         crop_buttons.columnconfigure(1, weight=1)
         ttk.Button(
@@ -121,7 +160,7 @@ class LauncherApp:
         ).grid(row=0, column=1, sticky="ew", padx=(6, 0))
 
         run_buttons = ttk.Frame(main)
-        run_buttons.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(14, 6))
+        run_buttons.grid(row=10, column=0, columnspan=2, sticky="ew", pady=(14, 6))
         run_buttons.columnconfigure(0, weight=1)
         run_buttons.columnconfigure(1, weight=1)
         ttk.Button(run_buttons, text="Start App", command=self._start_app).grid(
@@ -134,11 +173,11 @@ class LauncherApp:
             row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0)
         )
 
-        ttk.Separator(main).grid(row=8, column=0, columnspan=2, sticky="ew", pady=12)
+        ttk.Separator(main).grid(row=11, column=0, columnspan=2, sticky="ew", pady=12)
 
-        ttk.Label(main, text="Status").grid(row=9, column=0, sticky="nw", pady=4)
+        ttk.Label(main, text="Status").grid(row=12, column=0, sticky="nw", pady=4)
         ttk.Label(main, textvariable=self.checklist).grid(
-            row=9, column=1, sticky="w", pady=4
+            row=12, column=1, sticky="w", pady=4
         )
 
         mapping_text = (
@@ -148,18 +187,18 @@ class LauncherApp:
             "Victory -> Confetti\n"
             "OK Sign -> OK Ring"
         )
-        ttk.Label(main, text="Gesture").grid(row=10, column=0, sticky="nw", pady=4)
-        ttk.Label(main, text=mapping_text).grid(row=10, column=1, sticky="w", pady=4)
+        ttk.Label(main, text="Gesture").grid(row=13, column=0, sticky="nw", pady=4)
+        ttk.Label(main, text=mapping_text).grid(row=13, column=1, sticky="w", pady=4)
 
         obs_text = (
             f"OBS Window Capture: {OUTPUT_WINDOW_NAME}\n"
             "WhatsApp Camera: DroidCam Output"
         )
         ttk.Label(main, text=obs_text).grid(
-            row=11, column=0, columnspan=2, sticky="w", pady=(10, 2)
+            row=14, column=0, columnspan=2, sticky="w", pady=(10, 2)
         )
         ttk.Label(main, textvariable=self.status).grid(
-            row=12, column=0, columnspan=2, sticky="w", pady=(8, 0)
+            row=15, column=0, columnspan=2, sticky="w", pady=(8, 0)
         )
 
     def _load_config(self) -> dict[str, object]:
@@ -174,11 +213,13 @@ class LauncherApp:
         self.config.setdefault("screen_crop", {})
         self.config.setdefault("effects", {})
         self.config.setdefault("gesture", {})
+        self.config.setdefault("obs", {})
 
         camera = self.config["camera"]
         crop = self.config["screen_crop"]
         effects = self.config["effects"]
         gesture = self.config["gesture"]
+        obs = self.config["obs"]
         if isinstance(camera, dict):
             camera["index"] = int(self.camera_index.get())
             camera["width"] = width
@@ -191,6 +232,9 @@ class LauncherApp:
         if isinstance(gesture, dict):
             gesture.setdefault("detection_interval_frames", 2)
             gesture.setdefault("max_input_size", 640)
+        if isinstance(obs, dict):
+            obs["path"] = self.obs_path.get().strip()
+            obs["auto_open"] = bool(self.auto_open_obs.get())
 
         CONFIG_PATH.write_text(
             json.dumps(self.config, indent=2) + "\n",
@@ -236,6 +280,8 @@ class LauncherApp:
             return
 
         self._save_settings()
+        if self.auto_open_obs.get():
+            self._open_obs(show_message=False)
         width, height = self._parse_resolution()
         command = [
             _pythonw_executable(),
@@ -267,6 +313,39 @@ class LauncherApp:
             creationflags=creationflags,
         )
         self.status.set("App berjalan. Capture Clean Output di OBS.")
+        self._refresh_checklist()
+
+    def _browse_obs(self) -> None:
+        path = filedialog.askopenfilename(
+            title="Pilih obs64.exe",
+            filetypes=[("OBS executable", "obs64.exe"), ("Executable", "*.exe")],
+        )
+        if not path:
+            return
+        self.obs_path.set(path)
+        self._save_settings()
+
+    def _open_obs(self, show_message: bool = True) -> None:
+        obs_path = Path(self.obs_path.get().strip())
+        if not obs_path.exists():
+            self.status.set("OBS path belum benar. Klik Browse.")
+            if show_message:
+                messagebox.showerror("OBS", "OBS path belum benar. Klik Browse.")
+            return
+
+        try:
+            subprocess.Popen(
+                [str(obs_path)],
+                cwd=obs_path.parent,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except OSError as exc:
+            self.status.set("Gagal membuka OBS.")
+            if show_message:
+                messagebox.showerror("OBS", str(exc))
+            return
+
+        self.status.set("OBS dibuka.")
         self._refresh_checklist()
 
     def _stop_app(self) -> None:
@@ -347,6 +426,7 @@ class LauncherApp:
                     f"App: {'RUNNING' if app_running else 'STOPPED'}",
                     f"Efek: {'ON' if self.effects_enabled.get() else 'OFF'}",
                     f"Crop: {'OK' if crop_ready else 'BELUM'}",
+                    f"OBS Auto-open: {'ON' if self.auto_open_obs.get() else 'OFF'}",
                     f"OBS: {OUTPUT_WINDOW_NAME}",
                     "WhatsApp: DroidCam Output",
                 ]
@@ -375,6 +455,13 @@ def _pythonw_executable() -> str:
     if pythonw.exists():
         return str(pythonw)
     return str(executable)
+
+
+def _detect_obs_path() -> str:
+    for path in DEFAULT_OBS_PATHS:
+        if path.exists():
+            return str(path)
+    return ""
 
 
 if __name__ == "__main__":
