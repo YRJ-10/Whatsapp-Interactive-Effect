@@ -187,11 +187,11 @@ class LauncherApp:
         )
 
         mapping_text = (
-            "Open Palm -> Glow\n"
-            "Fist -> Impact\n"
-            "Thumbs Up -> LIKE\n"
-            "Victory -> Confetti\n"
-            "OK Sign -> OK Ring"
+            "Open Palm -> Cinematic Glow\n"
+            "Fist -> Shockwave Impact\n"
+            "Thumbs Up -> Modern LIKE\n"
+            "Victory -> Party Confetti\n"
+            "OK Sign -> Neon OK Ring"
         )
         ttk.Label(main, text="Gesture").grid(row=13, column=0, sticky="nw", pady=4)
         ttk.Label(main, text=mapping_text).grid(row=13, column=1, sticky="w", pady=4)
